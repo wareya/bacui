@@ -13,7 +13,7 @@ it freely, provided that the above copyright notice and this permission notice
 appear in all source code distributions.
 
 It is not necessary for this license to appear in non-substantial portions of
-source code, nor is it necessary for them to appear in end-user products.
+source code, and not necessary for this license to appear in end-user products.
 
 END PUBLIC LICENSE
 */
@@ -214,6 +214,8 @@ void print_custom(const char * str, uint32_t len)
 #define InputType M64PLUGIN_INPUT
 #define RSPType   M64PLUGIN_RSP
 
+FILE * real_stdout;
+
 int init()
 {
     // environment
@@ -221,6 +223,32 @@ int init()
     freopen("log.txt", "w", stdout);
     freopen("err.txt", "w", stderr);
     real_print = print_terminal;
+    
+    // set up curses
+    
+    real_stdout = fopen(TERMINAL, "w");
+    if(!real_stdout) return puts("Could not open file handle to stdout. Good job."), -1;
+    auto s = newterm(NULL, real_stdout, stdin);
+    
+    start_color();
+    use_default_colors();
+    
+    init_pair(1, COLOR_GREEN, COLOR_BLACK);
+    init_pair(2, -1, -1);
+    init_pair(3, COLOR_WHITE, COLOR_BLACK);
+    
+    clear();
+    cbreak();
+    noecho();
+    nonl();
+    
+    // debug
+    
+    fflush(stdout);
+    fflush(stderr);
+    
+    printw("Loading....");
+    refresh();
     
     // internal
     
@@ -291,32 +319,6 @@ int init()
     ATTACH(RSP)
     
     ConfigSaveFile();
-    
-    // set up curses
-    
-    FILE * real_stdout = fopen(TERMINAL, "w");
-    if(!real_stdout) return puts("Could not open file handle to stdout. Good job."), -1;
-    auto s = newterm(NULL, real_stdout, stdin);
-    
-    start_color();
-    use_default_colors();
-    
-    init_pair(1, COLOR_GREEN, COLOR_BLACK);
-    init_pair(2, -1, -1);
-    init_pair(3, COLOR_WHITE, COLOR_BLACK);
-    
-    clear();
-    cbreak();
-    noecho();
-    nonl();
-    
-    // debug
-    
-    fflush(stdout);
-    fflush(stderr);
-    
-    printw("Hello World !!!");
-    refresh();
     
     return 0;
 }
@@ -435,18 +437,22 @@ int main()
     if(int r = init()) return puts("Init failed."), r;
     
     // boot
-    
     emulating = 1;
     auto uithread = SDL_CreateThread(runui, "Interface Thread", NULL);
     
+    // enter core loop
     if(emulate() != 0) emulating = 0;
     
     // shutdown
-    
     SDL_WaitThread(uithread, nullptr);
     SDL_DestroyMutex(logmutex);
     
     fflush(stdout);
     fflush(stderr);
+    
+    fclose(real_stdout);
+    freopen(TERMINAL, "w", stdout);
+    puts("Emulator has stopped.");
+    
     return 0;
 }
